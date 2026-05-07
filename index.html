@@ -215,7 +215,18 @@ function boot(){
   try{const sa=localStorage.getItem(SK_AW);if(sa)awData=JSON.parse(sa);}catch(e){}
   try{const lc=localStorage.getItem(SK_LINKS);if(lc)linksCache=JSON.parse(lc);}catch(e){}
   // Build linksCache from embedded gepland data if empty
-  if(!Object.keys(linksCache).length){EMBEDDED_GEPLAND.forEach(it=>{if(it.dnw&&(it.plannen_url||it.werfmap_url||it.s4_url))linksCache[it.dnw]={plannen_url:it.plannen_url,werfmap_url:it.werfmap_url,s4_url:it.s4_url};});}
+  if(!Object.keys(linksCache).length){
+    EMBEDDED_GEPLAND.forEach(it=>{if(it.dnw&&(it.plannen_url||it.werfmap_url||it.s4_url))linksCache[it.dnw]={plannen_url:it.plannen_url,werfmap_url:it.werfmap_url,s4_url:it.s4_url};});
+  }
+  // Also update awData items with links from linksCache
+  awData.forEach(it=>{
+    if(it.dnw&&!it.plannen_url&&!it.werfmap_url&&!it.s4_url){
+      const lc=linksCache[it.dnw]||{};
+      if(lc.plannen_url)it.plannen_url=lc.plannen_url;
+      if(lc.werfmap_url)it.werfmap_url=lc.werfmap_url;
+      if(lc.s4_url)it.s4_url=lc.s4_url;
+    }
+  });
   if(!data.length)data=EMBEDDED_GEPLAND;
   if(!awData.length)awData=EMBEDDED_AW;
   document.getElementById('syncDate').textContent=syncLabel;
@@ -453,7 +464,13 @@ function readXLS(file){
         for(let i=1;i<rows.length;i++){
           const r=rows[i],dnw=String(r[5]||'').trim(),straat=String(r[2]||'').trim();
           if(!dnw&&!straat)continue;
-          res.push({startdatum:fmtD(r[0]),einddatum:fmtD(r[1]),straat,deelgemeente:String(r[3]||'').trim(),hoofdgemeente:String(r[4]||'').trim(),dnw,type:String(r[6]||'').trim(),extra_info:cleanInfo(r[15]),koppeldatum:fmtD(r[16])});
+          // Also read links from Afgewerkt sheet (col 8=Studie/Plannen, 9=Werfmap, 10=S4)
+          // AND fall back to linksCache if not present
+          const awLc=linksCache[dnw]||{};
+          const awPlan=r[8]?String(r[8]).trim():null;
+          const awWerf=r[9]?String(r[9]).trim():null;
+          const awS4=r[10]?String(r[10]).trim():null;
+          res.push({startdatum:fmtD(r[0]),einddatum:fmtD(r[1]),straat,deelgemeente:String(r[3]||'').trim(),hoofdgemeente:String(r[4]||'').trim(),dnw,type:String(r[6]||'').trim(),plannen_url:awPlan||awLc.plannen_url||null,werfmap_url:awWerf||awLc.werfmap_url||null,s4_url:awS4||awLc.s4_url||null,extra_info:cleanInfo(r[15]),koppeldatum:fmtD(r[16])});
         }
         return res;
       };
@@ -467,6 +484,15 @@ function readXLS(file){
       try{localStorage.setItem(SK_DATA,JSON.stringify(data));localStorage.setItem(SK_AW,JSON.stringify(awData));localStorage.setItem(SK_SYNC,lbl);localStorage.setItem(SK_LINKS,JSON.stringify(linksCache));}catch(e){}
       document.getElementById('syncDate').textContent=lbl;
       document.getElementById('drawer').classList.remove('open');
+      // Inject links into awData items that have none
+      awData.forEach(it=>{
+        if(it.dnw&&!it.plannen_url&&!it.werfmap_url&&!it.s4_url){
+          const lc=linksCache[it.dnw]||{};
+          if(lc.plannen_url)it.plannen_url=lc.plannen_url;
+          if(lc.werfmap_url)it.werfmap_url=lc.werfmap_url;
+          if(lc.s4_url)it.s4_url=lc.s4_url;
+        }
+      });
       render();renderAw();
       toast(`✅ ${data.length} lopend · ${awData.length} afgewerkt · vinkjes bewaard`,'ok');
     }catch(err){toast('❌ '+err.message,'err');}
